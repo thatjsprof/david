@@ -1,0 +1,393 @@
+## How to use Redux Sagas in a React Application
+
+![Image or redux saga](https://i.imgur.com/CHH1saS.png)
+
+Redux is an open-source javascript library for managing application state. If you are looking to explore redux in more detail, check this [article](https://www.valentinog.com/blog/redux/). However, In this article we won't focus entirely on redux but on the concept of sagas that address the limitations of redux.
+
+[Redux Sagas](https://redux-saga.js.org/) were introduced mainly to address the side effects that come with performing asynchronous actions in Redux. An alternative to Redux Sagas, [Redux Thunk](https://github.com/reduxjs/redux-thunk) created a callback hell when performing asynchronous actions and Sagas were introduced to combat that.
+
+In this article, you will learn the basics of redux Sagas and how to use them in a react application.
+
+## Prerequisites
+
+This article assumes the reader has the following:
+
+1. Node &gt;= 8.10 installed on their local development machine.
+2. npm 5.2 or higher installed on their local development machine.
+3. Basic understanding of React and Redux.
+
+## Examining the Limitations of Redux
+
+There are a few things that contribute to the limitations of redux. We are going to be considering a few of them in order to understand why we need to use redux sagas.
+
+### Redux is synchronous
+
+A synchronous process follows a certain sequence usually in a series of steps. Redux synchronously manages our application state. The backbone of redux is reducers.
+
+> A reducer is a pure function that determines the changes to an application's state. In redux, they take the action and the previous state then return to the next state. There are things you should not do in a reducer:
+>
+> - Mutate the values passed to the function.
+> - Introduce side effects like route transitions or API calls
+> - Call non-pure functions. e.g `Math.random()`
+
+### Redux causes side effects
+
+Side effects result when a function changes a variable that is outside of its local environment. A few examples of side effects are listed below:
+
+- Changing the value of a variable
+- Making an API call to a database
+- Writing data to disk
+- Enabling or disabling a button on the user's interface.
+
+Side effects occur in redux when for example you want to respond to a redux action (when a user clicks a button to make an API call to fetch data).
+
+### Resolving side effects using middleware
+
+We can use middleware to prevent redux from creating side effects.
+
+> Redux middleware is a snippet of code that provides a third-party extension point between dispatching an action and the moment it reaches the reducers. Every middleware has a next() that calls the next action in the line. It is a way to extend redux with custom functionality.
+
+Some of the most popular redux side-effect middlewares are redux-saga, redux-thunk, redux-observables, and redux-promise. These are external dependencies we can install in our app to give us that extended functionality.
+
+## What are Redux Sagas?
+
+A saga is used to coordinate and trigger asynchronous actions. Sagas work by utilizing generator functions that make asynchronous actions appear synchronous. Let's take a look at generators. If you are already used to generators you can skip to setting up redux-saga.
+
+### Generators
+
+A generator function can be paused and resumed instead of running all the statements in the function at once. Generator functions are represented with the (\*):
+
+```js
+function* myGenerator() {
+  const value1 = yield "I am the first value";
+  const value2 = yield "I am the second value";
+  return "I am the third value";
+}
+```
+
+When a generator function is invoked, it returns an iterator object. Each time the iterator's next method is invoked, the generator body would be executed until the next yield statement and then pause. It does this until it returns an undefined value:
+
+```js
+const gen = myGenerator();
+console.log(gen.next()); // {value: "I am the first value", done: false}
+console.log(gen.next()); // {value: "I am the second value", done: false}
+console.log(gen.next()); // {value: "I am the third value", done: false}
+console.log(gen.next()); // {value: undefined, done: true}
+```
+
+This format makes asynchronous code easier to use. Compare:
+
+```js
+fetch(url).then((value) => {
+  console.log(value);
+});
+```
+
+to:
+
+```js
+const value = yield fetch(url)
+console.log(value)
+```
+
+Now that you have seen a simple example of how generators work, let's now move on to implementing redux-saga in your app.
+
+## Implementing Redux Saga in your app
+
+### Creating a new react project
+
+To set up a new react project, run either of the following commands:
+
+```js
+npx create-react-app my-app
+npm init react-app my-app
+```
+
+This would create a folder structure in your current directory similar to this:
+
+![Basic react app](https://i.imgur.com/XiDxJ9l.png)
+
+### Adding the Redux Saga library to our app
+
+To add redux-saga to our new app, run the following command:
+
+```js
+npm i redux-saga
+```
+
+This would install redux-saga as a dependency in our app.
+
+We also need to install a few other dependencies. Run the following commands to install react-redux.
+
+```js
+npm i react-redux
+```
+
+Let's now proceed by setting up our store.
+
+### Setting up our store
+
+We would be using the modular approach where 'module' represents the one you would be working with.
+
+1. Create a new folder in the 'src' folder named 'redux'.
+2. Create a 'store.js' file where we would set up our store.
+3. Create a 'root-reducer.js' file where we would set up our reducer.
+4. Create a 'root-saga.js' file where we would export all our sagas from.
+5. Create a folder called 'module' inside our 'redux' folder.
+6. Create three files named 'module.actions.js', 'module.sagas.js', and 'module.types.js' inside the 'module' folder.
+
+You should now have a folder structure similar to this:
+
+![Folder structure for our app](https://i.imgur.com/71ymacd.png)
+
+Let's now configure our store,
+
+Add the following code to our 'root-reducer.js' file:
+
+```js
+import { combineReducers } from "redux";
+
+import moduleReducer from "./module/module.reducer";
+
+const rootReducer = combineReducers({
+  module: moduleReducer,
+});
+
+export default rootReducer;
+```
+
+Add the following code to our 'store.js' file, importing our Root reducer:
+
+```js
+import { createStore } from "redux";
+import rootReducer from "./root-reducer";
+
+export const store = createStore(rootReducer);
+
+export default store;
+```
+
+Modify the 'index.js' file in our base directory passing in the exported store value to our provider.
+
+```js
+import React from "react";
+import ReactDOM from "react-dom";
+import "./index.css";
+import App from "./App";
+import { Provider } from "react-redux";
+import store from "./redux/store";
+
+ReactDOM.render(
+  <Provider store={store}>
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  </Provider>,
+  document.getElementById("root")
+);
+```
+
+### Setting up redux-saga
+
+In this section, we will be adding the saga middleware to redux.
+
+Let's now modify the 'store.js' file by bringing in the saga middleware:
+
+```js
+import { createStore, applyMiddleware } from "redux";
+import rootReducer from "./root-reducer";
+import createSagaMiddleware from "redux-saga";
+
+const SagaMiddleware = createSagaMiddleware();
+
+const middlewares = [SagaMiddleware];
+
+const store = createStore(rootReducer, applyMiddleware(...middlewares));
+
+SagaMiddleware.run();
+
+export default store;
+```
+
+In this block of code, we perform a couple of things:
+
+- We import the applyMiddleware function from redux to help us pass our array of middleware into the store.
+- We also instantiate a new saga middleware by calling the createSagaMiddleware method from redux-saga.
+- We pass that new instance to the middleware.
+- Finally, we run the saga middleware by calling .run() on our new instance.
+
+Let's now modify our 'root-saga.js' file. This is where we connect all the various sagas in our app.
+
+```js
+import { call, all } from "redux-saga/effects";
+import { moduleSagas } from "./module/module.sagas";
+
+export default function* rootSaga() {
+  yield all([call(moduleSagas)]);
+}
+```
+
+The all method binds all the individual sagas into one. The call method is just used to invoke the saga.
+
+We can then import our root saga into our 'store.js' file:
+
+```js
+import { createStore, applyMiddleware } from "redux";
+import rootReducer from "./root-reducer";
+import createSagaMiddleware from "redux-saga";
+import rootSaga from "./root-saga";
+
+const SagaMiddleware = createSagaMiddleware();
+
+const middlewares = [SagaMiddleware];
+
+const store = createStore(rootReducer, applyMiddleware(...middlewares));
+
+SagaMiddleware.run(rootSaga);
+
+export default store;
+```
+
+Now that we have our first saga set let's see how we can use it in our module.
+
+### Writing our first saga
+
+Before we get started writing our saga, let's add a few action types to our 'module.action.types' file:
+
+```js
+const actionTypes = {
+  ACTION_TYPE_1: "ACTION_TYPE_1",
+  ACTION_TYPE_2: "ACTION_TYPE_2",
+};
+
+export default actionTypes;
+```
+
+Let's add two actions to our 'module.actions.js' file:
+
+```js
+import actionTypes from "./module.types";
+
+export const getAction1 = (payload) => ({
+  type: actionTypes.ACTION_TYPE_1,
+  payload,
+});
+
+export const getAction2 = (payload) => ({
+  type: actionTypes.ACTION_TYPE_2,
+  payload,
+});
+```
+
+Let's also set up our 'module.reducer.js' file:
+
+```js
+import actionTypes from "./module.types";
+
+const INITIAL_STATE = {
+  value: "",
+};
+
+const moduleReducer = (state = INITIAL_STATE, action) => {
+  switch (action.type) {
+    case actionTypes.ACTION_TYPE_1:
+      return {
+        ...state,
+      };
+    case actionTypes.ACTION_TYPE_2:
+      return {
+        ...state,
+      };
+    default:
+      return {
+        ...state,
+      };
+  }
+};
+
+export default moduleReducer;
+```
+
+Now we will look at the methods the redux-saga library provides to us:
+
+Let's modify our 'module.sagas.js' and add the following code:
+
+```js
+import { all, take, takeEvery, takeLatest } from "redux-saga/effects";
+```
+
+We have already encountered all method, but let's consider what the other methods do for us: `take` - Used to tell the generator function to wait until a particular action type is dispatched. It Receives only one parameter which is the action type (string | array | function)
+
+`takeEvery` - Similar to take. It tells the generator function to wait until it encounters an action type. It receives three arguments. The first argument is the action type (string | array | function). The second argument is what generator function it should call when the action type is dispatched while the third or more arguments are parameters passed to the second argument.
+
+`takeLatest` - This is similar to takeEvery. The only difference is that the generator function passed as the second argument is called only once i.e. the latest call.
+
+Let's now create some generator functions to see how we can use each of these methods:
+
+`take`
+
+```js
+import { all, take } from "redux-saga/effects";
+import actionTypes from "./module.types";
+
+function* performActionTake() {
+  yield take(actionTypes.ACTION_TYPE_1);
+  console.log("I was called");
+}
+
+export default function* moduleSagas() {
+  yield all([call(performActionTake)]);
+}
+```
+
+In this block of code, the value 'I was called' won't be logged until the action type 'ACTION_TYPE_1' is dispatched.
+
+`takeEvery`
+
+```js
+import { all, put, takeEvery } from "redux-saga/effects";
+import { getAction1 } from "./module.actions";
+import actionTypes from "./module.types";
+
+function* actionTakeEvery() {
+  const data = yield fetch("API_URL");
+  yield put(getAction1(data));
+}
+
+function* performActionTakeEvery() {
+  yield takeEvery(actionTypes.ACTION_TYPE_1, actionTakeEvery);
+}
+
+export default function* moduleSagas() {
+  yield all([call(performActionTake)]);
+}
+```
+
+In this block of code, every time the action type 'ACTION_TYPE_1' is dispatched, the actionTakeEvery function is going to get called. We call out action functions. using the put method and we can see that inside the actionTakeEvery function, we pass the data we receive as a payload to our getAction1 function.
+
+`takeLatest`
+
+```js
+import { all, put, takeLatest } from "redux-saga/effects";
+import { getAction1 } from "./module.actions";
+import actionTypes from "./module.types";
+
+function* actionTakeLatest() {
+  const data = yield fetch("API_URL");
+  yield put(getAction1(data));
+}
+
+function* performActionTakeLatest() {
+  yield takeLatest(actionTypes.ACTION_TYPE_1, actionTakeLatest);
+}
+
+export default function* moduleSagas() {
+  yield all([call(performActionTake)]);
+}
+```
+
+In this block of code, every time the action type 'ACTION_TYPE_1' is dispatched, the actionTakeLatest function is going to get called. The only difference is that only the latest dispatch gets acted upon. We see that inside the actionTakeLatest function, we pass the data we receive as a payload to our getAction1 function.
+
+## Summary
+
+That’s it! I hope you enjoyed reading and are ready to use Redux-Saga in your codebase! If you have any questions, feel free to ask. I’m here and also on [Twitter](https://www.twitter.com/aj_davetech). Thanks for reading! 🙂

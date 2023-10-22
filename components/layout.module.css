@@ -1,0 +1,60 @@
+.main {
+  flex: 1;
+  max-width: 45rem;
+  width: 100%;
+  /* padding: 0 1rem 2.5rem 0; */
+  margin: 3rem auto;
+  padding: 0rem 1rem;
+  /* padding-bottom: 6rem; */
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.header {
+  color: #fff;
+  background-color: #006699;
+}
+
+.headerInner {
+  max-width: 45rem;
+  padding: 2rem 1rem 1rem 1rem;
+  margin: 0rem auto;
+}
+
+.headerLinks {
+  gap: 1.5rem;
+  display: flex;
+  /* flex-direction: row; */
+  flex-wrap: wrap;
+  margin-top: 2rem;
+}
+
+.linksApp {
+  flex-grow: 1;
+}
+
+.link {
+  margin-right: 1rem;
+  color: aliceblue;
+  opacity: 0.75;
+}
+
+.linksSocial {
+}
+
+.backToHome {
+  margin: 3rem 0 0;
+}
+
+.footer {
+  color: #808080;
+  flex-shrink: 0;
+  /* padding-top: 6rem; */
+  margin-top: 4rem;
+  margin-bottom: 2rem;
+  text-align: center;
+}
