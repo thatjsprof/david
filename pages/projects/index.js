@@ -1,13 +1,16 @@
 import FeaturedProject from "../../components/featuredProject";
 import { allProjects } from "../../constants/constants";
+import { useTheme } from "@mui/material";
 
 const Projects = () => {
+  const theme = useTheme();
+
   return (
     <div>
       <p
         style={{
           fontWeight: 800,
-          color: "#535353",
+          color: theme.palette.mode === "dark" ? "#aaa" : "#535353",
           fontSize: "2rem",
           margin: "1rem 0",
           lineHeight: "1rem",
@@ -22,7 +25,8 @@ const Projects = () => {
           marginBottom: "0rem",
         }}
       >
-        This is a list of projects I have built recently or a while back.
+        This is a list of some interesting projects I have built recently or a
+        while back.
       </p>
       <p>
         For projects in view, please click this{" "}
