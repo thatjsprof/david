@@ -1,0 +1,266 @@
+# How to generate and download a PDF document in a Next.JS Application
+So I recently tried to find a package to download a pdf document in Next JS without having the content rendered on the page first and it proved a little difficult so I had to figure out a different solution which I would be sharing in this short blog post.
+
+## Prerequisites
+Before we continue, I would like to outline the technologies we would be using:
+
+1. Node Express Backend Server (Code is written in Typescript).
+2. AWS S3 to store the PDF document.
+3. The `html-node-pdf` package. You can install the package by running `yarn add html-node-pdf`.
+
+## What's the solution?
+The approach we would be using is pretty straightforward. We would outline the steps below and go into each in more details. The steps include:
+
+1. Construct the pdf contents in HTML.
+2. Send the HTML content to your NodeJS server as a string.
+3. Convert the HTML string to buffer.
+4. Upload the buffer to S3 as a pdf.
+5. Retreive the object url from S3 and send it back to the Client.
+6. Implement the logic to open the url as a link.
+
+## Breaking down each step
+### Generate HTML content
+Let's use a simple html template that would serve as the content of the pdf.
+```js
+const Template = () => {
+    return `
+        <!DOCTYPE html>
+        <html>
+            <body>
+                <h1>PDF Content</h1>
+            </body>
+        </html>
+    `
+}
+```
+
+We would typically have a function that makes a call to the backend and send the html string
+```js
+const handleDownload = async () => {
+    const response = await generatePDFAPICall({
+        htmlString: Template(),
+        title: "Test.pdf" // Name of the pdf
+    })
+
+    console.log(response)
+}
+```
+
+### Node JS implementation
+You should have a route that the client can send a request to with the pdf content and the controller configured
+```js
+// mediaRoutes.ts
+
+// You would typically have your auth middleware and the middleware for the route
+
+import express from 'express';
+import { generatePDFController } from 'path-to-controller';
+
+const router = express.Router();
+
+router.post('/pdf', generatePDFController);
+
+export default router;
+```
+
+#### Step One: Setting up the generate PDF controller
+```js
+// generatePDFController.ts
+
+import { RequestHandler } from 'express';
+
+const uploadPDFController: RequestHandler = async (req, res) => {};
+
+export { uploadPDFController };
+```
+
+#### Step Two: Now let's create the S3 service class
+```js
+// s3Service.ts
+
+import * as AWS from '@aws-sdk/client-s3';
+import { Upload } from '@aws-sdk/lib-storage';
+
+interface IUpload<B> {
+    Body: B
+    Key: string
+    Bucket: string
+    FileName: string
+    ContentType: string
+}
+
+interface S3Service {
+    upload: (params: IUpload) => void
+}
+
+const client = new AWS.S3Client({
+    region: process.env.REGION,
+    credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID_ENV!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY_ENV!
+    }
+});
+
+class S3Service implements S3Service {
+    static upload = async <B>({ Key, Body, Bucket, ContentType, FileName }: IUpload<B>) => {
+        const params: AWS.PutObjectCommandInput = {
+            Key,
+            Body,
+            Bucket,
+            ContentType
+        };
+
+        const initiateUpload = new Upload({
+            client,
+            params
+        });
+
+        const result = await initiateUpload.done();
+
+        const response = {
+            url: result.Location,
+            fileName: result.Key
+        }
+
+        const newContentDisposition = `attachment; filename="${FileName}"`;
+
+        const copyObjectParams = {
+            Key,
+            Bucket,
+            CopySource: `/${Bucket}/${Key}`,
+            MetadataDirective: AWS.MetadataDirective.REPLACE,
+            Metadata: {
+                'Content-Disposition': newContentDisposition
+            }
+        };
+
+        const copyObjectCommand = new AWS.CopyObjectCommand(copyObjectParams);
+        await client.send(copyObjectCommand);
+
+        return response
+    }
+}
+
+export default S3Service
+```
+Let's break down what we've just come up with
+- We first setup the S3 client
+- Create a static method called `upload` to handle media uploads
+- Construct the parameters for the upload operation and pass to the `Upload` method
+- We set up the content disposition header for the object. The `Content-Disposition` header provides information on how the content should be handled by the browser or client. It is often used to specify whether the content should be displayed inline in the browser or treated as an attachment and downloaded. In our case, we want it to be downloaded as an attachment.
+- We then return the response of the upload process which is the `fileName` and `url`
+
+Note: You need to make the S3 Bucket public so it's accessible. You can do this by adding the following policy to your bucket.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::your-bucket-name/*"
+    }
+  ]
+}
+```
+
+#### Step Three: Using the S3 Service class in our controller:
+```js
+// generatePDFController.ts
+
+import pdf from 'html-pdf-node';
+import { promisify } from 'util';
+import { v4 as uuid } from 'uuid';
+import S3Service from 'path-to-s3-service'
+import { RequestHandler, Request } from 'express';
+
+interface IBody {
+  htmlString: string;
+  title: string;
+}
+
+type IReq = Request<{}, {}, IBody>
+
+const generateIdentifier = (fileName: string) => {
+    const uniqueIdentifier = uuid();
+    const splitString = str.split('.');
+    const extension = splitString.pop();
+    const newString = `${splitString.join('')}-${uniqueIdentifier}.${extension}`;
+    return newString;
+}
+
+const uploadPDFController: RequestHandler = async (req: IReq, res) => {
+    const data: IBody = req.body
+
+    const options = {
+        format: 'A4'
+    };
+
+    const bufferCreator = promisify(pdf.generatePdf);
+    const buffer = await bufferCreator({ content: data.htmlString }, options);
+
+    const FileName = data.title
+    const Body = buffer
+    const Key = generateIdentifier(FileName)
+
+    const imageResponse = await S3Service.upload({
+        Key,
+        Body,
+        FileName,
+        Bucket: "your-bucket-name",
+        ContentType: "application/pdf",
+    });
+
+    const response = {
+      data: imageResponse,
+      error: null,
+      status: 200,
+      message: 'PDF Download link generated successfully'
+    };
+
+    res.status(response.status).send(response);
+};
+
+export { uploadPDFController };
+```
+And that's it. We've been able to write the controller that receives the html string, converts it to a buffer, uploads the buffer to S3 and retreive the object url.
+Now let's set up the client side logic to download the pdf.
+
+### Download the PDF on the client side
+```js
+const handleDownload = async () => {
+    try {
+        const response = await generatePDFAPICall({
+            htmlString: Template(),
+            title: "Test.pdf" // Name of the pdf
+        });
+
+        const status = response.status;
+
+        if (status === 200) {
+            const data = response.data;
+            const link = document.createElement("a");
+            link.href = data.url;
+            link.download = data.fileName;
+            link.click();
+        } else {
+            // handle server side errors
+        }
+    } catch (err) {
+        // handle function execution errors
+    }
+}
+```
+We've setup the logic to get back the response from the backend and open the link in the browser. Because of the content disposition header we set up the browser automatically downloads the document.
+
+## Extra
+You can setup a lambda function with a cron expression to create a schedule that empties the bucket after a certain period. You might not want to keep the buckets content since it's just for the user to download.
+
+## Summary
+
+That’s it! I hope you enjoyed reading and you find this helpful! If you have any questions, feel free to ask.
+I’m here and also on [Twitter](https://www.twitter.com/aj_davetech).
+
+Thanks for reading! 🙂
