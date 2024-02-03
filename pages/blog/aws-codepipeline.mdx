@@ -1,0 +1,221 @@
+# Creating a CI/CD pipeline using AWS Codepipeline (Script)
+&nbsp;
+
+    {/* ![](https://media.licdn.com/dms/image/D4D12AQHST_rCJfp4JQ/article-cover_image-shrink_720_1280/0/1664373479168?e=2147483647&v=beta&t=FHd1kLlK0_3XVhF7tkxI0zvE2vdKPOtiEHqOaNBDl1o) */}
+
+## Introduction
+
+A CI/CD (Continuous Integration/Continuous Deployment) pipeline is a set of automated processes that facilitate the continuous integration and delivery of software applications.
+
+This is a short write-up that provides a quick codepipeline setup in AWS cdk for automating code deployment anytime code is pushed to a github repository.
+
+## What is codebuild and codepipeline?
+
+### Codepipeline
+- AWS CodePipeline is a fully managed continuous delivery service that orchestrates the workflow of your release process.
+- It allows you to define and visualize your release process using a pipeline model.
+- The pipeline consists of stages, and each stage can have one or more actions.
+- CodePipeline integrates with build services like AWS CodeBuild for compiling, testing, and packaging the application.
+
+### Codebuild
+- CodeBuild allows you to use pre-configured build environments or define custom build environments using build specifications (buildspec.yml).
+- CodeBuild is often used as a build provider within a CodePipeline stage.
+- In a typical setup, a CodePipeline build stage triggers CodeBuild to perform the build and test actions.
+
+## Why this writeup?
+- I tried to come up with a way to trigger a build whenever a pull request is raised to a target branch but could not find relevant resources.
+- To save someone minutes or hours of debugging.
+
+
+## The Pipeline Script
+```js
+import "source-map-support/register";
+import * as cdk from "aws-cdk-lib";
+import { Construct } from "constructs";
+
+import * as s3 from "aws-cdk-lib/aws-s3";
+import * as sns from "aws-cdk-lib/aws-sns";
+import * as iam from "aws-cdk-lib/aws-iam";
+import * as codebuild from "aws-cdk-lib/aws-codebuild";
+import * as targets from "aws-cdk-lib/aws-events-targets";
+import * as codepipeline from "aws-cdk-lib/aws-codepipeline";
+import * as subscription from "aws-cdk-lib/aws-sns-subscriptions";
+import * as codepipeline_actions from "aws-cdk-lib/aws-codepipeline-actions";
+
+class PipelineStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+    super(scope, id, props);
+
+    const env = "dev" // Specify the environment based on your organizations requirements.
+
+    // Initialize your application stack here
+    new YourAppStack(this, "your-app-stack-name", {});
+
+    const buildEnvironment: codebuild.BuildEnvironment = {
+      buildImage:
+        codebuild.LinuxBuildImage.fromDockerRegistry("node:18.18.2-slim"),
+    };
+
+    // Create a new pipeline role
+    const pipelineRole = new iam.Role(this, `PipelineRole-${env}`, {
+      assumedBy: new iam.ServicePrincipal("codebuild.amazonaws.com"),
+      roleName: `PipelineRole-${env}`,
+    });
+
+    // Attach relevant policies
+    pipelineRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: [
+          "cloudformation:*",
+          "ssm:*",
+          "iam:*",
+          "lambda:InvokeFunction",
+        ],
+        resources: ["*"],
+      })
+    );
+
+    pipelineRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["sts:AssumeRole"],
+        resources: ["*"],
+      })
+    );
+
+    // Add your github auth token to AWS secrets manager and grant codebuild access.
+    new codebuild.GitHubSourceCredentials(this, "GithubCredentials", {
+      accessToken: cdk.SecretValue.secretsManager("name-of-secret"), // replace with the name of your secret.
+    });
+
+    // Create a github source connection for codebuild
+    const gitHubSource = codebuild.Source.gitHub({
+      owner: "repo-owner", // replace with your github owner name.
+      repo: "repo-name", // replace with your github repo name.
+      cloneDepth: 1,
+      webhook: true,
+      branchOrRef: env,
+      reportBuildStatus: true,
+      webhookFilters: [
+        // Specify the events you want the build to be triggered for.
+        codebuild.FilterGroup.inEventOf(
+          codebuild.EventAction.PULL_REQUEST_CREATED,
+          codebuild.EventAction.PULL_REQUEST_REOPENED,
+          codebuild.EventAction.PULL_REQUEST_UPDATED
+          codebuild.EventAction.PULL_REQUEST_MERGED
+        ),
+      ],
+    });
+
+    // Create a new codebuild project. Codebuild provides a build environment to build your project.
+    const project = new codebuild.Project(this, `CodebuildProject-${env}`, {
+      projectName: `CodebuildProject-${env}`,
+      source: gitHubSource,
+      description: "project-description", // replace with your project description.
+      environment: buildEnvironment,
+      role: pipelineRole,
+      concurrentBuildLimit: 1, // this ensures that you only have one build running per time to prevent multiple stack updates.
+      buildSpec: codebuild.BuildSpec.fromObject({
+        version: "0.2",
+        phases: {
+          // Specify your pre-build commands here
+          pre_build: {
+            commands: [],
+          },
+          // Specify your build commands here
+          build: {
+            commands: [],
+          },
+        },
+      }),
+    });
+
+    // Create a S3 bucket that codepipeline would use to store information regarding your builds
+    const artifactBucket = new s3.Bucket(scope, `ArtifactBucket-${env}`, {
+        versioned: true,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Create a new codepipeline to organize your build process
+    const pipeline = new codepipeline.Pipeline(scope, `PipelineName-${env}`, {
+        pipelineName: `PipelineName-${env}`,
+        artifactBucket,
+    });
+
+    // Grant codepipeline access to your github repository
+    const githubAction = new codepipeline_actions.GitHubSourceAction({
+        actionName: "GitHubSource",
+        output: new codepipeline.Artifact(),
+        oauthToken: cdk.SecretValue.secretsManager("name-of-secret"), // replace with the name of your secret.
+        owner: "repo-owner", // replace with your github owner name.
+        repo: "repo-name", // replace with your github repo name.
+        branch: env,
+        trigger: codepipeline_actions.GitHubTrigger.WEBHOOK, // This enables github to setup webhooks that reference codepipeline which are triggered whenever a push is made to the target repository.
+    });
+
+    // Attach your codebuild project to the pipeline
+    const buildAction = new codepipeline_actions.CodeBuildAction({
+        actionName: "BuildAction",
+        project,
+        input: githubAction.actionProperties.outputs?.[0] as codepipeline.Artifact,
+    });
+
+    // Setup your pipeline stages. First stage is to connect to github and the second is to trigger the build.
+    pipeline.addStage({
+        stageName: "Source",
+        actions: [githubAction],
+    });
+
+    pipeline.addStage({
+        stageName: "Build",
+        actions: [buildAction],
+    });
+
+    // Add this section if you want to send build status reports to a lambda function.
+    const buildLambda = new lambda.Function(this, "PipelineBuildLambda", {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: "index.handler",
+      code: lambda.Code.fromAsset("path-to-function-code"),
+    });
+
+    const snsTopic = new sns.Topic(this, `CodeBuildNotifications-${env}`, {
+      topicName: `CodeBuildNotifications-topic-${env}`,
+      displayName: `CodeBuildNotifications-${env}`,
+    });
+
+    snsTopic.grantPublish(project);
+    snsTopic.grantPublish(buildLambda);
+    snsTopic.addSubscription(
+      new subscription.LambdaSubscription(buildLambda)
+    );
+
+    project
+      .onBuildStarted("BuildStarted", {
+        description: "Rule to send notification on build start",
+      })
+      .addTarget(new targets.SnsTopic(snsTopic));
+    project
+      .onBuildFailed("BuildFailed", {
+        description: "Rule to send notification on unsuccessful build",
+      })
+      .addTarget(new targets.SnsTopic(snsTopic));
+    project
+      .onBuildSucceeded("BuildSucceded", {
+        description: "Rule to send notification on successful build",
+      })
+      .addTarget(new targets.SnsTopic(snsTopic));
+  }
+}
+```
+
+I have added relevant comments to explain each step. Feel free to use on your next project.
+
+Whenever you push code or raise a pull request against your target repository, you should see your build trigger on AWS Codebuild.
+
+
+&nbsp;
+
+There you have it folks.
+
+If you need help or have questions, you can reach me on [Twitter](https://twitter.com/aj_davetech) or shoot me an email at david.ajayi.anu@gmail.com.
+
+Thanks for reading! 🙂
