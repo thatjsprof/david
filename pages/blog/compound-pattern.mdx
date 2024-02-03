@@ -1,0 +1,390 @@
+# Compound Components Pattern
+
+&nbsp;
+
+A compund is generally referred to as anything that is made up of two or more elements. In React, Compound components are set of components that are bound together by a shared state. It's most usually represented in a parent-child relationship where the parent holds some state and that state is passed down to the children. One key takeaway is that it should be created in a way that prevents you from using any of the child components outside the parent's context.
+
+In React, Compound components are set of components that are bound together by a shared state. It's most usually represented in a parent-child relationship where the parent holds some state and that state is passed down to the children
+
+Let's look at what could be considered a compound component:
+In HTML, we have the select tag that usually holds a nested set of input tags
+
+```html
+<select name="select">
+    <input value="one">One</option>
+    <input value="two">Two</option>
+</select>
+```
+
+The Select tag could be said to hold a state of what value it currently has and the input tags when selected could change what that value is. In order words update the state of their parent (select). Note also that if you try using the option tag without it's parent not only do you lose the intended functionality, you also lose access to the state and ability to set it.
+
+I hope that explanation was good enough to grasp the basic idea. Now on to our implementation.
+
+### Implementing the Compound Component Pattern
+
+There are usually two main approaches to crafting a compound component: One is using the React.Children.map method or the React Context approach introduced in [React v16.8](https://reactjs.org/docs/hooks-intro.html#:~:text=Hooks%20are%20a%20new%20addition,features%20without%20writing%20a%20class.)
+
+The latter prevents a problem referred to as [prop drilling](https://blog.logrocket.com/solving-prop-drilling-react-apps/#:~:text=Prop%20drilling%20is%20the%20unofficial,actual%20need%20for%20this%20data.) but that's not the topic of our discussion.
+
+Let's get started with the first approach:
+
+#### Compound Component using React.Children
+
+#### Basic Setup
+
+Before we begin, we'll be using codesandbox to quickly get started without so much setup. Navigate to [CodeSandbox](https://codesandbox.io) and click on the 'Create Sandbox' button at the top right corner of the navbar. Select React from the list of templates and voila we're good to go.
+
+Note: We would be working directly from the App.js file. If you have everything setup you should see something like this:
+
+```js
+import "./styles.css";
+
+export default function App() {
+  return (
+    <div className="App">
+      <h1>Hello CodeSandbox</h1>
+      <h2>Start editing to see some magic happen!</h2>
+    </div>
+  );
+}
+```
+
+One more thing before we get started, add the following dependencies:
+
+```json
+@mui/material
+@emotion/react
+@emotion/styled
+```
+
+The @mui/material package gives us quick access to UI Components we can quickly use and the other two packages are dependencies it needs to work properly.
+
+#### Let's Get Started
+
+Replace the App.js file with the code below. We would be building a checkbox component with children components that let you access the state to know when it's been checked on and off and also control the checking functionality.
+
+```js
+import Checkbox from "@mui/material/Checkbox";
+
+const Checker = () => {
+  return <Checkbox />;
+};
+
+export default Checker;
+```
+
+That would just render a checkbox on the screen. Now let's add some static properties to the checker component just to keep everything together, you can create them as seperate components as well.
+
+The idea is that all the child components would get access to the state of the checker component so let's wire up the checker component to toggle on and off the checkbox.
+
+```js
+import React from "react";
+import Checkbox from "@mui/material/Checkbox";
+
+const Checker = () => {
+  const [on, setOn] = React.useState(false);
+
+  const toggle = () => setOn((on) => !on);
+
+  return <Checkbox checked={on} onChange={toggle} />;
+};
+
+Checker.On = () => {};
+
+Checker.Off = () => {};
+
+Checker.CheckBox = () => {};
+
+export default Checker;
+```
+
+Now we intend to use our component in a way similar to this:
+
+```js
+<Checker>
+  <Checker.On></Checker.On>
+  <Checker.Off></Checker.Off>
+  <Checker.CheckBox></Checker.CheckBox>
+</Checker>
+```
+
+So the `Checker.On`, `Checker.Off` and `Checker.CheckBox` components need to somehow have access to the Checker component state. We can achieve this using the React.Children.map method (this maps over the children and we can pass props down to them) since all this components are children on the Checker component.
+
+```js
+import React from "react";
+import Checkbox from "@mui/material/Checkbox";
+
+const Checker = (props) => {
+  const [on, setOn] = React.useState(false);
+
+  const toggle = () => setOn((on) => !on);
+
+  const getStateAndHelpers = () => ({
+    on,
+    toggle,
+  });
+
+  return React.children.map(props.children, (child) => {
+    return React.cloneElement(child, getStateAndHelpers());
+  });
+};
+
+Checker.On = () => {};
+
+Checker.Off = () => {};
+
+Checker.CheckBox = () => {};
+
+export default Checker;
+```
+
+Now that our Child components have access to the state, we can destructure off the props:
+
+```js
+import React from "react";
+import Checkbox from "@mui/material/Checkbox";
+
+const Checker = (props) => {
+  const [on, setOn] = React.useState(false);
+
+  const toggle = () => setOn((on) => !on);
+
+  const getStateAndHelpers = () => ({
+    on,
+    toggle,
+  });
+
+  return React.Children.map(props.children, (child) => {
+    return React.cloneElement(child, getStateAndHelpers());
+  });
+};
+
+Checker.On = ({ on, children }) => {
+  return on ? children : null;
+};
+
+Checker.Off = ({ on, children }) => {
+  return on ? null : children;
+};
+
+Checker.CheckBox = ({ on, toggle }) => {
+  return <Checkbox checked={on} onChange={toggle} />;
+};
+
+export default Checker;
+```
+
+Now we can use the Checker component as follows:
+
+```js
+<Checker>
+  <Checker.On>Checkbox is On</Checker.On>
+  <Checker.Off>Checkbox is Off</Checker.Off>
+  <Checker.CheckBox />
+</Checker>
+```
+
+You should see the following output:
+
+<div>
+  <img src="https://i.imgur.com/KDgzS6I.png=300x150" alt="CheckBox Off" />
+  <img src="https://i.imgur.com/ZPb4D2p.png=300x150" alt="Checkbox On" />
+</div>
+
+#### Compound Component using React Context
+
+We can use the same code sandbox environment we setup earlier. Let's take our component back to it's basic state:
+
+```js
+import React from "react";
+import Checkbox from "@mui/material/Checkbox";
+
+const CheckerContext = React.createContext();
+
+const Checker = () => {
+  return <Checkbox />;
+};
+
+export default Checker;
+```
+
+The only thing we've added it the line (4) to initiate the context object which we can instantiate with empty values. This is the initial context that would be passed to all consumers of the context. Now let's wire up our checker component to toggle on and off the checkbox and set up our child components and wrap the CheckerContext Provider around them so they can consume the context object (the on state and toggle function):
+
+```js
+import React from "react";
+import Checkbox from "@mui/material/Checkbox";
+
+const CheckerContext = React.createContext();
+
+const Checker = (props) => {
+  const [on, setOn] = React.useState(false);
+
+  const toggle = () => setOn((on) => !on);
+
+  const getStateAndHelpers = () => ({
+    on,
+    toggle,
+  });
+
+  return (
+    <CheckerContext.Provider value={getStateAndHelpers()}>
+      {props.children}
+    </CheckerContext.Provider>
+  );
+};
+
+Checker.On = () => {};
+
+Checker.Off = () => {};
+
+Checker.CheckBox = () => {
+  return <Checkbox />;
+};
+
+export default Checker;
+```
+
+We notice that we pass a value prop to the `CheckerContext.Provider`. This are the values we want our child components to consume.
+
+Now how do we make our child components access the state of the parent? Well we can do that by making use of the CheckerContext.Consumer in our child component:
+
+```js
+<CheckerContext.Consumer>
+  {(context) => {
+    // Do what you want to do with the values in the context object
+  }}
+</CheckerContext.Consumer>
+```
+
+Now Let's refactor:
+
+```js
+import React from "react";
+import Checkbox from "@mui/material/Checkbox";
+
+const CheckerContext = React.createContext();
+
+const Checker = (props) => {
+  const [on, setOn] = React.useState(false);
+
+  const toggle = () => setOn((on) => !on);
+
+  const getStateAndHelpers = () => ({
+    on,
+    toggle,
+  });
+
+  return (
+    <CheckerContext.Provider value={getStateAndHelpers()}>
+      {props.children}
+    </CheckerContext.Provider>
+  );
+};
+
+Checker.On = ({ children }) => {
+  return (
+    <CheckerContext.Consumer>
+      {({ on }) => {
+        return on ? children : null;
+      }}
+    </CheckerContext.Consumer>
+  );
+};
+
+Checker.Off = ({ children }) => {
+  return (
+    <CheckerContext.Consumer>
+      {({ on }) => {
+        return on ? null : children;
+      }}
+    </CheckerContext.Consumer>
+  );
+};
+
+Checker.CheckBox = () => {
+  return (
+    <CheckerContext.Consumer>
+      {(on, toggle) => {
+        return <Checkbox checked={on} onChange={toggle} />;
+      }}
+    </CheckerContext.Consumer>
+  );
+};
+
+export default Checker;
+```
+
+Now using our component the same way we did above offers us the same functionality:
+
+```js
+<Checker>
+  <Checker.On>Checkbox is On</Checker.On>
+  <Checker.Off>Checkbox is Off</Checker.Off>
+  <Checker.CheckBox />
+</Checker>
+```
+
+Awesome 🎉 we have been able to get our Component to work ✅
+
+One thing I like to do after achieving a feature is to take a step back and look for ways I can optimize my solution. So let's look at the context solution (the more ideal approach) and think of how to improve:
+
+1. We repeat the `<CheckerContext.Consumer></CheckerContext.Consumer>` several times in our component so how about abstracting that into a function.
+2. We would not like for users to use the child components without the parent so how about we throw an error letting them know that.
+
+Let's work on optimization one:
+
+```js
+const CheckerConsumer = (props) => {
+  return (
+    <CheckerContext.Consumer>
+      {(context) => {
+        return props.children(context);
+      }}
+    </CheckerContext.Consumer>
+  );
+};
+```
+
+Then we can consume like follows (Example applied only on `Checker.On` and is the same implementation for the rest):
+
+```js
+Checker.On = ({ children }) => {
+  return (
+    <CheckerConsumer>
+      {({ on }) => {
+        return on ? children : null;
+      }}
+    </CheckerConsumer>
+  );
+};
+```
+
+Now let's go on to optimization two:
+
+We have abstracted the context consumption to a seperate function so we can just check if context exists and throw an error if it doesn't
+
+```js
+const CheckerConsumer = (props) => {
+  return (
+    <CheckerContext.Consumer>
+      {(context) => {
+        if (!context) {
+          throw new Error("You cannot use component outside it's Parent");
+        }
+
+        return props.children(context);
+      }}
+    </CheckerContext.Consumer>
+  );
+};
+```
+
+Voila 🥳
+
+There you have it folks. The Compound Component Pattern!
+
+I hope you've learnt something today and I'll be happy to receive feedback from you, trust me any feedback is welcome.
+
+You can also reach me on [Twitter](https://twitter.com/aj_davetech) or shoot me an email at david.ajayi.anu@gmail.com.
+
+Thanks for reading! 🙂
