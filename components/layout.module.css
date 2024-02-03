@@ -37,13 +37,19 @@
   flex-grow: 1;
 }
 
-.link {
+.linksApp .link {
   margin-right: 1rem;
+}
+
+.link {
   color: aliceblue;
   opacity: 0.75;
 }
 
 .linksSocial {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
 .backToHome {
