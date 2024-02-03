@@ -22,8 +22,8 @@ export default function Home() {
           </h3>
           <p>
             I am a software engineer with up to 4 years of professional
-            experience in the Web development space using Node JS, AWS, React,
-            GraphQL, PostgresQL, Docker and more.
+            experience in the web development space using Node JS, AWS Services,
+            React, Next JS, GraphQL, PostgresQL, Docker and more.
           </p>
           <p
             style={{
@@ -32,7 +32,7 @@ export default function Home() {
           >
             Recently I built{" "}
             <a
-              href="https://github.com/Pully-Infra/"
+              href="https://pully-infra.github.io/pully-landing/"
               target="_blank"
               style={{
                 color: "#009999",
@@ -42,7 +42,19 @@ export default function Home() {
               Pully
             </a>
             , a scalable open-source realtime messaging infrastructure that can
-            be used to provide in-transit messaging for applications.
+            be used to provide in-transit messaging for applications and{" "}
+            <a
+              href="https://github.com/webhooks-plug" // Change later
+              target="_blank"
+              style={{
+                color: "#e68a00",
+                cursor: "pointer",
+              }}
+            >
+              Webplug
+            </a>
+            , a webhooks as a service infrastructure that can be used to manage
+            webhooks for users of a service.
           </p>
         </div>
         <div
@@ -50,8 +62,15 @@ export default function Home() {
             marginTop: "1.5rem",
           }}
         >
+          I picked up golang recently. Excited to see where that takes me.
+        </div>
+        <div
+          style={{
+            marginTop: "1.5rem",
+          }}
+        >
           <p>
-            You can find me leveling up on my system design ⚙️ skills by
+            You can also find me levelling up on my system design ⚙️ skills by
             studying existing systems or learning the guitar 🎸 while I'm off
             work.
           </p>
