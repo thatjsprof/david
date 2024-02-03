@@ -1,0 +1,263 @@
+# How to use GraphQL and Apollo Client in a React Application
+
+![GraphQl image](https://i.imgur.com/Whh0eG2.png)
+
+GraphQL is a query language for APIs and a runtime for fulfilling those queries with your existing data.
+As a developer, I know it can be a pain when you hit an endpoint to fetch data and you are overwhelmed with too much information; GraphQL helps take away this pain by giving you more control over exactly what type of data gets returned. In this article, we are going to explore how to use GraphQL in your react application.
+&nbsp;
+
+## What are the advantages of GraphQL?
+
+1. You get control over the data you request from the server. GraphQL uses a client driven architecture.
+2. You can get many resources in a single request. You can access relationships between models in a single query instead of multiple.
+3. You have access to types to specify what range of data can be returned.
+
+Let's now move onto how to use GraphQL in your application.
+&nbsp;
+
+## Implementing GraphQL in our Application
+
+To get started, we are going to create a new react application by running any of the following commands in your terminal:
+
+```js
+npx create-react-app my-app
+npm init react-app my-app
+```
+
+This would create a directory structure similar to this:
+
+![new react project directory structure](https://i.imgur.com/8MZ3iWN.png)
+&nbsp;
+
+### Installing the required dependencies
+
+For us to make use of GraphQL in our application, let's install a couple of packages. Type the following command in your terminal:
+
+```js
+npm install graphql @apollo/client
+```
+
+This would install GraphQL and all the dependencies required for it to work correctly in our application.
+
+### Configuring GraphQL
+
+We'll start by importing the packages we just added into our 'index.js' file. To do that, add the following code:
+
+```js
+import {
+  ApolloClient,
+  InMemoryCache,
+  ApolloProvider,
+  createHttpLink,
+} from "@apollo/client";
+```
+
+<code>ApolloClient</code> just creates a new apollo instance and gets passed a configuration
+object
+
+<code>ApolloProvider</code> wraps your react app and places the apollo client on
+the context so that it can be accessible to the entire component tree.
+
+<code>createHttpLink</code> is used to initialize the url of the graphQL server.
+
+<code>InMemoryCache</code> is used by the apollo client to cache query results after
+fetching them.
+
+Let's now make use of these packages we just imported. Type the following code into your 'index.js' file:
+
+```js
+import React from "react";
+import ReactDOM from "react-dom";
+import {
+  ApolloClient,
+  InMemoryCache,
+  ApolloProvider,
+  createHttpLink,
+} from "@apollo/client";
+import "./index.css";
+import App from "./App";
+
+const httpLink = createHttpLink({
+  uri: "https://crwn-clothing.com", // This is the url of the GraphQL server we would be using for this tutorial
+});
+
+const cache = new InMemoryCache();
+
+const client = new ApolloClient({
+  link: httpLink,
+  cache,
+});
+
+ReactDOM.render(
+  <ApolloProvider client={client}>
+    <App />
+  </ApolloProvider>,
+  document.getElementById("root")
+);
+```
+
+One final thing we need to add is the initial data we need in our app. We can do this by adding the piece of code below to our 'index.js' file:
+
+```js
+client.writeData({
+  data: {
+    hidden: true,
+  },
+});
+```
+
+We would be using the <code>hidden</code> value to display some content inside our application in order to get a basic understanding of how to set and retrieve data from the graphQL server.
+
+### Setting up GraphQL in our application
+
+#### Step1: Defining our resolvers, type and mutation definitions
+
+Let's start by creating a 'graphql' folder in our directory. Inside this directory, we would create three files namely 'resolvers.js', 'mutationDefinitions.js', 'queryDefinitions.js'
+
+Let's now write a mutation that graphql would recognize when it is called in our application and trigger the function to set the hidden value we instantiated earlier on. We would do this in our 'mutationDefinition.js' file:
+
+```js
+import { gql } from "apollo-boost";
+
+export const TOGGLE_HIDDEN = gql`
+  mutation ToggleHidden {
+    toggleHidden @client
+  }
+`;
+```
+
+<code>gql</code> is imported as a function and the template literals enable us to
+pass the graphql definitions / schema to the function for it to be parsed. <code>
+  @client
+</code> specifies that you are writing client side schemas. <code>
+  ToggleHidden
+</code> is the mutation type. <code>toggleHidden</code> is the name of the mutation
+resolver which we would write.
+
+We would now write the query definition that specifies which value we are interested in returning from the query. We would do this in the 'queryDefinition.js' file:
+
+```js
+import { gql } from "apollo-boost";
+
+export const GET_CART_HIDDEN = gql`
+  {
+    hidden @client
+  }
+`;
+```
+
+Let's now write our type definitions and resolver functions in the 'resolvers.js' file:
+
+```js
+import { gql } from "apollo-boost";
+import { GET_HIDDEN } from "./queryDefinitions";
+
+export const typeDefs = gql`
+  extend type Mutation {
+    ToggleHidden: Boolean!
+  }
+`;
+
+export const resolvers = {
+  Mutation: {
+    toggleHidden: (_root, _args, { cache }) => {
+      const { hidden } = cache.readQuery({
+        query: GET_HIDDEN,
+      });
+
+      cache.writeQuery({
+        query: GET_HIDDEN,
+        data: { hidden: !hidden },
+      });
+
+      return !hidden;
+    },
+  },
+};
+```
+
+<code>toggleHidden</code> gets a couple of arguments including a cache object on
+which we can call a <code>readQuery</code> method to query and get the current value
+of the hidden property. We then use the <code>writeQuery</code> method to toggle
+the hidden value to the opposite of what it was. If it was false, it becomes true
+and vice-versa.
+
+Finally update the 'index.js' file by passing the resolvers and type definitions we exported from the 'resolvers.js' file to the ApolloClient configuration
+
+```js
+import React from "react";
+import ReactDOM from "react-dom";
+import {
+  ApolloClient,
+  InMemoryCache,
+  ApolloProvider,
+  createHttpLink,
+} from "@apollo/client";
+import { resolvers, typeDefs } from "./graphql/resolvers";
+import "./index.css";
+import App from "./App";
+
+const httpLink = createHttpLink({
+  uri: "https://crwn-clothing.com", // This is the url of the GraphQL server we would be using for this tutorial
+});
+
+const cache = new InMemoryCache();
+
+const client = new ApolloClient({
+  link: httpLink,
+  cache,
+  resolvers,
+  typeDefs,
+});
+
+ReactDOM.render(
+  <ApolloProvider client={client}>
+    <App />
+  </ApolloProvider>,
+  document.getElementById("root")
+);
+```
+
+#### Step 2: Using the Mutation and Query Definitions
+
+In our 'App.js' file let's now fetch and set the hidden value; Add the following code:
+
+```js
+import React from "react";
+import { TOGGLE_HIDDEN } from "../../graphql/mutationDefinitions";
+import { GET_HIDDEN } from "../../graphql/queryDefinitions";
+import { Query, Mutation } from "react-apollo";
+
+const App = () => (
+  <Mutation mutation={TOGGLE_HIDDEN}>
+    {(toggleHidden) => (
+      <Query query={GET_HIDDEN}>
+        {({ data: { hidden } }) => {
+          return (
+            <button toggleHidden={toggleHidden}>Toggle Hidden</button>
+            <span>{hidden}</span>
+          );
+        }}
+      </Query>
+    )}
+  </Mutation>
+);
+
+export default App;
+```
+
+We import the Query and Mutation components from the 'react-apollo' library which receive a query and mutation prop. The props receive the query and mutation definitions we had created earlier on.
+
+The Mutation component make the <code>toggleHidden</code> method exposed for us to use in the application, likewise the Query component exposes the hidden value.
+
+If you click on the Button, you would see that the hidden value toggles.
+
+&nbsp;
+&nbsp;
+
+## Summary
+
+That’s it! I hope you enjoyed reading and are ready to use GraphQL in your React application! If you have any questions, feel free to ask.
+I’m here and also on [Twitter](https://www.twitter.com/aj_davetech).
+
+Thanks for reading! 🙂
