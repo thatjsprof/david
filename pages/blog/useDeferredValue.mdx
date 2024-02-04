@@ -1,0 +1,46 @@
+# Exploring the useDeferredValue hook in React
+
+&nbsp;
+
+<img
+  src="https://ucarecdn.com/d5503b06-ce10-4651-8b9b-d5c3bb7249ad/"
+  alt="React 18 Image"
+/>
+
+## What is the useDeferredValue hook?
+
+useDeferredValue is a React Hook introduced in React 18. It's used to create a deferred value. A deferred value is a value that represents the most recent state but is potentially outdated. This can be useful for optimizing the rendering performance of certain components.
+
+## Exploring an example of using the hook
+
+Let's say we have a list that changes based on a search parameter. Rapidly typing into the search input would cause the list component to be re-rendered multiple times.
+&nbsp;
+What if we had a way to abandon re-renders until the last deferred value? That's where the hook comes into play.
+&nbsp;
+List component example:
+
+```jsx
+import React, { useDeferredValue } from "react";
+
+const ListWrapper = () => {
+  const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
+
+  const updateSearch = (e) => {
+    setSearch(e.target.value);
+  };
+
+  return (
+    <div>
+      <input value={search} onChange={updateSearch} />
+      <List search={deferredSearch} />
+    </div>
+  );
+};
+```
+
+Now the list component receives the deferred search value and renders in between re-renders are abandoned hence improving the performance of the component.
+
+That’s it! I hope you enjoyed reading! If you have any questions, feel free to ask. I’m here and also on [Twitter](https://www.twitter.com/aj_davetech).
+
+Thanks for reading! 🙂
