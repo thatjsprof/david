@@ -1,0 +1,357 @@
+# Using Prisma-Appsync to provision appsync resolvers in under 10 minutes
+
+&nbsp;
+![](https://prisma-appsync.vercel.app/logo.svg)
+&nbsp;
+
+## Introduction
+
+Prisma is a Node.js and Typescript ORM for databases and features an  intuitive data model, automated migrations, type-safety & auto-completion. You would typically define your models and relationships in a schema.prisma file and prisma would expose a data API that enables you to communicate with your database.
+
+## Where does prisma-appsync come in?
+Imagine a scenario where you have a postgres database and you want to use graphql (appsync in this case) to communicate with your database, you want to be able to define your models using prisma and run a command that helps you generate graphql schema and resolvers that can communicate with your database and return you data.
+
+That's where prisma-appsync comes in.
+
+Prisma-Appsync lets you instantly generate a full blown Appsync compatible schema from your prisma schema. It lets you iterate fast by auto generating resolvers for CRUD operations based on your prisma schema. You can also define custom resolvers that leverage prisma's API.
+
+## How does it work?
+
+Let's explore this by taking a look at a sample `prisma.schema` file
+
+```schema
+// prisma.schema
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL") // The connection string of your postgres database
+}
+
+generator client {
+    provider      = "prisma-client-js"
+    binaryTargets = ["native", "rhel-openssl-1.0.x"]
+}
+
+generator appsync {
+    provider        = "prisma-appsync"
+}
+
+model Posts {
+    id     String @id @default(uuid())
+    title  String
+    userId String
+    user   user   @relation(fields: [userId], references: [id])
+}
+
+model user {
+    id    String  @id @default(uuid())
+    title String
+    posts Posts[]
+}
+```
+
+The schema above defines a post and a user model. Generally when creating models, 
+you would generally want to perform CRUD operations. An example of some of these operations could be:
+
+1. Creating a user - `createUser mutation`
+2. Updating a user - `updateUser mutation`
+3. Get a user - `getUser query`
+4. Delete a user - `deleteUser mutation`
+
+and vice versa for the post model.
+
+This is where prisma-appsync is useful as it automatically provisions resolvers that handle these CRUD operations and generates Appsync compatible schema.
+
+Now that you have a better understanding of what prisma-appsync does, let's see how you can actually use it.
+
+## Installing prisma-appsync
+
+To install prisma-appsync, run the command below:
+
+```bash
+# using yarn
+yarn add prisma-appsync
+
+# using npm
+npm i prisma-appsync
+```
+
+Run the following command to generate the prisma client. You should run this command from the same directory in which your `prisma.schema` file is located.
+
+```bash
+npx prisma generate
+```
+
+You should see a prisma/generated folder in your base directory.
+
+```txt
+prisma/generated/
+  |__ client  # prisma client information
+  |__ resolvers.yaml   # list of appsync resolvers
+  |__ schema.gql   # Appsync compatible schema
+```
+
+## Using prisma-appsync
+
+Let's first create our Appsync API stack.
+
+We would deploy a new appsync API using AWS CDK and also create a new lambda functions which would be our API data source.
+
+```js
+// cdk/stack.ts
+
+import * as cdk from "aws-cdk-lib";
+import * as AppSync from "aws-cdk-lib/aws-appsync";
+import { Construct } from "constructs";
+import path = require("path");
+import * as fs from "fs";
+import * as yaml from "js-yaml";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+
+interface AppsyncStackProps {
+  resolverLambda: lambda.IFunction;
+}
+
+const resolversFileContent = fs.readFileSync(
+  "./prisma/generated/prisma-appsync/resolvers.yaml", // The path to the generated resolvers.yaml file
+  "utf8"
+);
+
+const loadResolvers = (path: string) =>
+  yaml.load(path) as {
+    typeName: string;
+    fieldName: string;
+    dataSource: string;
+  }[];
+
+class AppsyncStack extends cdk.Stack {
+  constructor(
+    scope: Construct,
+    id: string,
+    props?: cdk.StackProps
+  ) {
+    super(scope, id, props);
+
+    const api = new AppSync.GraphqlApi(this, "API", {
+      name: `API`,
+      xrayEnabled: true,
+      authorizationConfig: {
+        defaultAuthorization: {
+          authorizationType: AppSync.AuthorizationType.API_KEY,
+        },
+      },
+      logConfig: {
+        excludeVerboseContent: false,
+        fieldLogLevel: AppSync.FieldLogLevel.ALL,
+      },
+      definition: AppSync.Definition.fromFile(
+        path.resolve(
+          ".prisma/generated/prisma-appsync/schema.gql" // The path to the generated schema.gql file
+        )
+      ),
+    });
+
+    const lambdaDataSource = new lambda.Function(
+      this,
+      `ResolverLambda`,
+      {
+        functionName: `ResolverLambda`,
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: "index.handler",
+        timeout: cdk.Duration.seconds(30), // Increase the timeout since the lambda would be used to resolve queries
+        code: lambda.Code.fromAsset("./resolverLambda"), // The path to the lambda function directory
+      }
+    );
+  }
+}
+```
+
+Paste the following code in the `index.js` file of the lambda function you created above:
+
+```js
+// resolverLambda/index.ts
+
+// Import generated Prisma-AppSync client (adjust path as necessary)
+import { PrismaAppSync } from './prisma/generated/prisma-appsync/client'
+
+// Instantiate Prisma-AppSync Client
+const prismaAppSync = new PrismaAppSync()
+
+// Lambda handler (AppSync Direct Lambda Resolver)
+export const main = async (event: any) => {
+    return await prismaAppSync.resolve({ event })
+}
+```
+
+In the above code, we have been able to create a new Appsync API and the lambda function that would act as the data source for the API. Now let's attach the resolvers generated by prisma-appsync.
+
+```js
+// cdk/stack.ts
+
+import * as cdk from "aws-cdk-lib";
+import * as AppSync from "aws-cdk-lib/aws-appsync";
+import { Construct } from "constructs";
+import path = require("path");
+import * as fs from "fs";
+import * as yaml from "js-yaml";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+
+interface AppsyncStackProps {
+  resolverLambda: lambda.IFunction;
+}
+
+const resolversFileContent = fs.readFileSync(
+  "./prisma/generated/prisma-appsync/resolvers.yaml", // The path to the generated resolvers.yaml file
+  "utf8"
+);
+
+const loadResolvers = (path: string) =>
+  yaml.load(path) as {
+    typeName: string;
+    fieldName: string;
+    dataSource: string;
+  }[];
+
+class AppsyncStack extends cdk.Stack {
+  constructor(
+    scope: Construct,
+    id: string,
+    props?: cdk.StackProps
+  ) {
+    super(scope, id, props);
+
+    const api = new AppSync.GraphqlApi(this, "API", {
+      name: `API`,
+      xrayEnabled: true,
+      authorizationConfig: {
+        defaultAuthorization: {
+          authorizationType: AppSync.AuthorizationType.API_KEY,
+        },
+      },
+      logConfig: {
+        excludeVerboseContent: false,
+        fieldLogLevel: AppSync.FieldLogLevel.ALL,
+      },
+      definition: AppSync.Definition.fromFile(
+        path.resolve(
+          ".prisma/generated/prisma-appsync/schema.gql" // The path to the generated schema.gql file
+        )
+      ),
+    });
+
+    const lambdaDataSource = new lambda.Function(
+      this,
+      `ResolverLambda`,
+      {
+        functionName: `ResolverLambda`,
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: "index.handler",
+        timeout: cdk.Duration.seconds(30), // Increase the timeout since the lambda would be used to resolve queries
+        code: lambda.Code.fromAsset("./resolverLambda"), // The path to the lambda function directory
+      }
+    );
+
+    const lambdaDs = api.addLambdaDataSource(
+      `${id}ResolverLambda-${environment}`,
+      lambdaDataSource
+    );
+
+    const resolvers = loadResolvers(resolversFileContent);
+
+    resolvers.forEach(({ typeName, fieldName }) => {
+      const resolverId = `${typeName}${fieldName}Resolver`;
+
+      new AppSync.Resolver(this, resolverId, {
+        api: api,
+        dataSource: lambdaDs,
+        typeName,
+        fieldName,
+      });
+    });
+  }
+}
+```
+
+We are importing the resolvers from the `resolvers.yaml` file located in the `prisma/generated` folder and creating new resolvers for the API as well as attaching the lambda as the data source.
+
+In the lambda function code we wrote, the `prismaAppSync.resolve` function automatically handles the resolution of the queries and mutations that were auto-generated as listed in the `resolvers.yaml` file.
+
+You can run `cdk deploy` to provision your appsync API.
+
+## Adding Custom Resolvers
+
+Prisma-appsync also you define custom resolvers/schema and write your logic to interact with your database. You just need to edit your resolver lambda function and add the following:
+
+
+```js
+// resolverLambda/index.ts
+
+import { PrismaAppSync, QueryParamsCustom } from './prisma/generated/prisma-appsync/client'
+
+// Instantiate Prisma-AppSync Client
+const prismaAppSync = new PrismaAppSync()
+
+// Lambda handler (AppSync Direct Lambda Resolver)
+export const main = async (event: any) => {
+    return await prismaAppSync.resolve({ 
+        event,
+        resolvers: {
+            customResolver: async ({
+                args, // Holds the arguments you passed in the graphql call
+                prismaClient // Holds a reference to your prisma client
+            }: QueryParamsCustom<any>) => {
+                // Perform your operation here and return the result
+            };
+        }
+    })
+}
+```
+
+You would also need to create a `custom-resolvers.yaml` and `custom-schema.gql` file in the same directory as your `prisma.schema` file.
+
+```yaml
+# custom-resolvers.yaml
+
+- typeName: Mutation
+  fieldName: customResolver # The name of the custom resolver
+  dataSource: prisma-appsync
+```
+
+```graphql
+# custom-schema.gql
+
+extend type Mutation {
+  """
+  My custom resolver
+  """
+  customResolver(args: String): String # Specify the arguments and return type of your custom resolver
+}
+```
+
+You need to let the prisma.schema be aware of the new changes. Update the file with the code below
+
+```schema
+// prisma.schema
+
+generator appsync {
+    provider        = "prisma-appsync"
+    extendSchema    = "./custom-schema.gql"
+    extendResolvers = "./custom-resolvers.yaml"
+}
+```
+
+Run `npx prisma generate` once more to register your new changes.
+
+Then run `cdk deploy` so that your lambda resolver is updated with the latest changes.
+
+## Summary
+
+> Just like we have demonstrated, Prisma-Appsync lets you instantly generate a full blown Appsync compatible schema from your prisma schema. It lets you iterate fast by auto generating resolvers for CRUD operations based on your prisma schema. You can also define custom resolvers that leverage prisma's API.
+
+And there you have it folks.
+
+I hope you've learnt something today and I'll be happy to receive feedback from you, trust me any feedback is welcome.
+
+You can also reach me on [Twitter](https://twitter.com/aj_davetech) or shoot me an email at david.ajayi.anu@gmail.com.
+
+Thanks for reading! 🙂
