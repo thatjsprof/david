@@ -1,6 +1,13 @@
-## How to use Redux Sagas in a React Application
+# How to use Redux Sagas in a React Application
 
-![Image or redux saga](https://i.imgur.com/CHH1saS.png)
+&nbsp;
+
+<img
+  src="https://camo.githubusercontent.com/a3d8f5c8cfdb59b64959df4bc92678817e730034ce54c44935d82603d14eb908/68747470733a2f2f72656475782d736167612e6a732e6f72672f696d672f52656475782d536167612d4c6f676f2d4c616e6473636170652e706e67"
+  alt="Image or redux saga"
+/>
+
+&nbsp;
 
 Redux is an open-source javascript library for managing application state. If you are looking to explore redux in more detail, check this [article](https://www.valentinog.com/blog/redux/). However, In this article we won't focus entirely on redux but on the concept of sagas that address the limitations of redux.
 
@@ -94,7 +101,7 @@ Now that you have seen a simple example of how generators work, let's now move o
 
 ## Implementing Redux Saga in your app
 
-### Creating a new react project
+### Step 1: Creating a new react project
 
 To set up a new react project, run either of the following commands:
 
@@ -105,9 +112,9 @@ npm init react-app my-app
 
 This would create a folder structure in your current directory similar to this:
 
-![Basic react app](https://i.imgur.com/XiDxJ9l.png)
+<img src="https://i.imgur.com/XiDxJ9l.png" alt="Basic react app" />
 
-### Adding the Redux Saga library to our app
+### Step 2: Adding the Redux Saga library to our app
 
 To add redux-saga to our new app, run the following command:
 
@@ -125,7 +132,7 @@ npm i react-redux
 
 Let's now proceed by setting up our store.
 
-### Setting up our store
+### Step 3: Setting up our store
 
 We would be using the modular approach where 'module' represents the one you would be working with.
 
@@ -138,7 +145,9 @@ We would be using the modular approach where 'module' represents the one you wou
 
 You should now have a folder structure similar to this:
 
-![Folder structure for our app](https://i.imgur.com/71ymacd.png)
+<img src="https://i.imgur.com/71ymacd.png" alt="Folder structure for our app" />
+
+&nbsp;
 
 Let's now configure our store,
 
@@ -187,7 +196,7 @@ ReactDOM.render(
 );
 ```
 
-### Setting up redux-saga
+### Step 4: Setting up redux-saga
 
 In this section, we will be adding the saga middleware to redux.
 
@@ -250,7 +259,7 @@ export default store;
 
 Now that we have our first saga set let's see how we can use it in our module.
 
-### Writing our first saga
+### Step 5: Writing our first saga
 
 Before we get started writing our saga, let's add a few action types to our 'module.action.types' file:
 
@@ -390,4 +399,6 @@ In this block of code, every time the action type 'ACTION_TYPE_1' is dispatched,
 
 ## Summary
 
-That’s it! I hope you enjoyed reading and are ready to use Redux-Saga in your codebase! If you have any questions, feel free to ask. I’m here and also on [Twitter](https://www.twitter.com/aj_davetech). Thanks for reading! 🙂
+That’s it! I hope you enjoyed reading and are ready to use Redux-Saga in your codebase! If you have any questions, feel free to ask. I’m here and also on [Twitter](https://www.twitter.com/aj_davetech).
+
+Thanks for reading! 🙂
