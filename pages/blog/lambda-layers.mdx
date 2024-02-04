@@ -1,0 +1,190 @@
+# Leveraging lambda layers to share dependencies across multiple lambda functions
+
+## Introduction
+
+In the context of AWS (Amazon Web Services), a Lambda Layer refers to a distribution mechanism for reusable libraries, custom runtimes, or other function dependencies in AWS Lambda. Lambda Layers provide a way to manage and share code or dependencies across multiple Lambda functions.
+
+## Why would you need a lambda layer?
+
+There are a couple of reasons why you would consider using a lambda layer with your lambda functions, some of which include:
+
+1. <b>Code Reusability:</b> Lambda Layers allow you to package and deploy common code or dependencies separately from your Lambda functions.
+2. <b>Seperation of concerns:</b> Layers enable a separation of concerns between your function code and external dependencies. This separation can make your function code cleaner and more focused on business logic.
+3. <b>Size Limitations:</b> AWS Lambda has a size limitation for the deployment package of a function. By using Layers, you can reduce the size of the function deployment package and stay within these limits.
+4. <b>Usage across functions:</b> A single Layer can be attached to multiple Lambda functions, allowing you to share the same set of libraries or dependencies across multiple functions.
+5. <b>Custom Runtimes:</b> Layers also support custom runtimes, enabling you to bring your own runtime to Lambda. This is useful for scenarios where you have specific language runtime requirements.
+6. <b>Optimize cold starts:</b> By placing dependencies in a Layer, you can help optimize cold starts. The runtime dependencies are loaded once and can be reused across multiple invocations.
+
+&nbsp;
+
+        <img src="https://docs.aws.amazon.com/images/lambda/latest/dg/images/lambda-layers-diagram.png" width="100%" />
+        <sub>Source: AWS</sub>
+
+## How do lambda layers work?
+
+When creating a new lambda function, you would typically attach the lambda layer to it. When the lambda function is invoked, AWS Lambda automatically mounts the contents of the attached layers in the `/opt` directory of the functions execution environment.
+In your lambda function you would then import dependencies, modules or functions from the `/opt` path. The structure inside the `/opt` directory corresponds to the structure of the Lambda Layer. For example, if your lambda layer zip file contains a assets directory, you would access it in your function as `/opt/assets`.
+
+## Creating a lambda layer
+
+Let's use AWS CDK to see how we would attach a lambda layer to a lambda function.
+
+To start, create a new cdk lambda stack.
+
+```js
+// lambda-stack.ts
+
+import * as cdk from "aws-cdk-lib";
+
+class LambdaStack extends cdk.Stack {
+    constructor(scope, id, props) {
+        super(scope, id, props);
+    }
+}
+```
+
+Now let's add the code to create a new lambda function
+
+```js
+// lambda-stack.ts
+
+import * as cdk from "aws-cdk-lib";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+
+class LambdaStack extends cdk.Stack {
+    constructor(scope, id, props) {
+        super(scope, id, props);
+
+        // Create new lambda function
+        const newLambda = new lambda.Function(
+            this,
+            `LambdaFunction`,
+            {
+                functionName: `LambdaFunction`,
+                runtime: lambda.Runtime.NODEJS_18_X,
+                handler: "index.handler",
+                timeout: cdk.Duration.seconds(250),
+                code: lambda.Code.fromAsset("path-to-lambda-code"), // replace with the path to the directory of your lambda code or the zip file.
+            }
+        );
+    }
+}
+```
+
+Now let's create our lambda layer and attach to the lambda function
+
+```js
+// lambda-stack.ts
+
+import * as cdk from "aws-cdk-lib";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+
+class LambdaStack extends cdk.Stack {
+    constructor(scope, id, props) {
+        super(scope, id, props);
+
+        // Create new lambda layer
+        const newLayer = new lambda.LayerVersion(
+            this,
+            `LambdaLayer`,
+            {
+                layerVersionName: `LambdaLayer`,
+                code: lambda.Code.fromAsset("path-to-layer-code"), // replace with the path to the directory of your lambda layer code or the zip file.
+                compatibleRuntimes: [lambda.Runtime.NODEJS_18_X],
+                description: "Lambda Layer for test",
+            }
+        );
+
+        const newLambda = new lambda.Function(
+            this,
+            `LambdaFunction`,
+            {
+                functionName: `LambdaFunction`,
+                runtime: lambda.Runtime.NODEJS_18_X,
+                handler: "index.handler",
+                timeout: cdk.Duration.seconds(250),
+                layers: [newLayer],
+                code: lambda.Code.fromAsset("path-to-lambda-code"), // replace with the path to the directory of your lambda code or the zip file.
+            }
+        );
+    }
+}
+```
+
+That's it. You can then deploy this stack with the rest of your infrastructure by running `cdk deploy`
+
+## Using code from lambda layers in a lambda function
+
+Create a directory where the code for your layer function would live and create an index.js file inside. This is the same directory you referenced when creating the layer.
+
+We would write a test function which we can export from the layer to be accessed by our lambda function. You can also install external package dependencies.
+
+```js
+// layer/index.js
+
+const addFunction = (num1, num2) => num1 + num2
+
+export { addFunction }
+```
+
+
+Let's try to access the `addFunction` in our lambda function
+
+```js
+//lambda/index.js
+
+import { addFunction } from '/opt'
+
+// use addFunction here
+```
+
+As we can see from above, we can access code defined in our lambda layer inside the lambda function.
+
+### **Optional section**
+
+If you are using typescript locally, importing from the `/opt` directory would cause type errors so you should create a link in your `tsconfig.json` file so that typescript is aware such a path exists
+
+```json
+{
+    "paths": {
+      "/opt": [
+        "path-to-layer-code" // define path to your layer code relative to your lambda function
+      ],
+    },
+}
+```
+
+Note that you might also want to exclude the `/opt` path from being compiled given that it is now an external package
+
+```json
+{
+    "paths": {
+      "/opt": [
+        "path-to-layer-code" // define path to your layer code relative to your lambda function
+      ],
+    },
+    "exclude": [
+        "/opt/**/*"
+    ]
+}
+```
+
+If you are using a bundler like webpack for example, in your `webpack.config.js` you would also want to specify the `/opt` directory as an external module to prevent it from being bundled together with your source code
+
+```js
+// webpack.config.js
+
+module.exports = {
+    externals: {
+        "/opt": "commonjs /opt",
+    },
+}
+```
+
+&nbsp;
+
+There you have it folks. You can now use lambda layers in your next project.
+
+If you need help or have questions, you can reach me on [Twitter](https://twitter.com/aj_davetech) or shoot me an email at david.ajayi.anu@gmail.com.
+
+Thanks for reading! 🙂
