@@ -81,7 +81,7 @@ export const featuredProjects = [
     image: "logo.png",
     stack:
       "AWS Lambda, AWS Simple Notification Service, PostgreSQL, Cloudwatch Logs, oclif, shadcn/ui, tailwind. Deployed using AWS CDK.",
-    // website: "https://webhook-plugs.github.io/webhooks-plug-landing/",
+    website: "https://webhooks-plug.github.io/webhooks-plug-landing/",
     github: "https://github.com/webhooks-plug/",
     video: "https://youtu.be/5Ns9REq0fLU?si=OsNFKanMk_AsrWQv",
   },
